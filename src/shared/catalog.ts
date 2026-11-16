@@ -18,6 +18,7 @@ export const artworks: Artwork[] = [
       "当你移动视线，山的轮廓也会在想象中重新组合。",
     ],
     duration: 42,
+    minView: 50,
   },
   {
     id: "a2",
@@ -37,6 +38,7 @@ export const artworks: Artwork[] = [
       "不妨想象，下一次潮汐到来之前，时间是什么形状。",
     ],
     duration: 36,
+    minView: 35,
   },
   {
     id: "a3",
@@ -56,6 +58,7 @@ export const artworks: Artwork[] = [
       "你看到的是光，也可能是自己的某个午后。",
     ],
     duration: 39,
+    minView: 40,
   },
   {
     id: "a4",
@@ -75,6 +78,7 @@ export const artworks: Artwork[] = [
       "在这里，距离不再由地图决定。",
     ],
     duration: 45,
+    minView: 70,
   },
   {
     id: "a5",
@@ -94,6 +98,7 @@ export const artworks: Artwork[] = [
       "这是一次关于偶然与秩序的实验。",
     ],
     duration: 33,
+    minView: 30,
   },
   {
     id: "a6",
@@ -113,6 +118,7 @@ export const artworks: Artwork[] = [
       "绕行，停留，或者回望，都可以成为你理解这件作品的方式。",
     ],
     duration: 48,
+    minView: 75,
   },
 ];
 export const routes: Route[] = [

@@ -1,88 +1,59 @@
-import { Route, ArrowRight, Pause, Play, X } from "lucide-react";
-import { routes, artworkById } from "../../../shared/catalog";
-import type { TourState } from "../../../shared/types";
-import { tourProgress, tourRoute } from "../lib/routeProgress";
+import { Route, Play } from "lucide-react";
+import { artworkById } from "../../../shared/catalog";
+import { journeyPresets } from "../lib/presets";
+
 export function TourPanel({
-  state,
-  onStart,
-  onPause,
-  onResume,
-  onStop,
-  onNext,
+  onStartPreset,
+  activeId,
+  disabled,
 }: {
-  state: TourState;
-  onStart: (id: string) => void;
-  onPause: () => void;
-  onResume: () => void;
-  onStop: () => void;
-  onNext: () => void;
+  onStartPreset: (mustSee: string[], budgetSeconds: number) => void;
+  activeId: string | null;
+  disabled?: boolean;
 }) {
-  const current = tourRoute(state);
+  const presets = journeyPresets();
   return (
     <section className="tour-panel">
       <div className="section-title">
         <Route size={16} />
         <span>主题导览</span>
-        <small>CURATED JOURNEYS</small>
+        <small>PRESETS</small>
       </div>
-      {current && state.phase !== "idle" ? (
-        <div className="current-tour">
-          <span className="eyebrow">
-            正在探索 ·{" "}
-            {state.phase === "done"
-              ? "已完成"
-              : `${state.step + 1} / ${current.stops.length}`}
-          </span>
-          <h3>{current.name}</h3>
-          <progress value={tourProgress(state)} max="1" />
-          <p>
-            {state.phase === "done"
-              ? "这段旅程已完成，收藏你的所见。"
-              : `${state.phase === "walking" ? "正在前往" : state.phase === "paused" ? "导览已暂停" : "正在讲解"} · ${artworkById(current.stops[state.step])?.title}`}
-          </p>
-          <div className="tour-controls">
-            {state.phase !== "done" && (
-              <>
-                <button onClick={state.phase === "paused" ? onResume : onPause}>
-                  {state.phase === "paused" ? (
-                    <Play size={14} />
-                  ) : (
-                    <Pause size={14} />
-                  )}{" "}
-                  {state.phase === "paused" ? "继续" : "暂停"}
-                </button>
-                <button onClick={onNext}>
-                  下一站
-                  <ArrowRight size={14} />
-                </button>
-              </>
-            )}
-            <button aria-label="结束导览" onClick={onStop}>
-              <X size={14} />
-            </button>
-          </div>
-        </div>
-      ) : (
-        routes.map((r, i) => (
-          <button
-            className={"route-card route-" + i}
+      {presets.map((r, i) => {
+        const current = activeId === r.id;
+        return (
+          <div
+            className={
+              "route-card route-" + i + (current ? " route-active" : "")
+            }
             key={r.id}
-            onClick={() => onStart(r.id)}
           >
             <span>
-              JOURNEY 0{i + 1} <span>约 {i ? 3 : 2} 分钟 · 3 件作品</span>
+              JOURNEY 0{i + 1}
+              <span>
+                {r.stops.length} 件 · 最低观看 {Math.ceil(r.minViewSeconds / 60)} 分
+              </span>
             </span>
-            <h3>
-              {r.name}
-              <ArrowUpRightIcon />
-            </h3>
+            <h3>{r.name}</h3>
             <p>{r.subtitle}</p>
-          </button>
-        ))
-      )}
+            <p className="preset-stops">
+              {r.stops.map((id) => artworkById(id)?.title).join(" · ")}
+            </p>
+            <button
+              className="preset-start"
+              disabled={disabled}
+              aria-label={`以主题导览开始：${r.name}`}
+              onClick={() => onStartPreset(r.stops, r.budgetSeconds)}
+            >
+              <Play size={12} />
+              以此为必看开始
+            </button>
+          </div>
+        );
+      })}
+      <p className="preset-hint">
+        也可以不使用预设：在“参观计划”里按剩余时间、必看作品和临时封闭区域自由安排。
+      </p>
     </section>
   );
-}
-function ArrowUpRightIcon() {
-  return <span className="round-arrow">↗</span>;
 }

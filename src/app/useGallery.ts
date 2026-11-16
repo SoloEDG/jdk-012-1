@@ -2,40 +2,61 @@ import { useEffect, useRef } from "react";
 import { useWalker, distance, viewingPoint } from "../features/space";
 import { useCatalog } from "../features/catalog";
 import { useNarration } from "../features/narration";
-import { useTour } from "../features/tours";
+import { useVisit } from "../features/planner";
 import { useCollection } from "../features/collection";
 import { artworkById } from "../shared/catalog";
 export function useGallery() {
   const catalog = useCatalog();
-  const tour = useTour();
   const collection = useCollection();
-  const walker = useWalker(catalog.observe);
-  const narration = useNarration(() => {
-    if (tour.state.phase === "listening") tour.next();
+  const manualRef = useRef<() => void>(() => {});
+  const walker = useWalker(catalog.observe, () => manualRef.current());
+  const visitRef = useRef<ReturnType<typeof useVisit> | null>(null);
+  const narration = useNarration(() => visitRef.current?.onNarrationEnd());
+  const visit = useVisit({
+    walker,
+    narration,
+    recordVisit: collection.record,
+    recordSkip: collection.recordSkip,
+    recordPlan: collection.recordPlan,
+    clearSkips: collection.clearSkips,
+    focus: catalog.select,
   });
+  visitRef.current = visit;
+  manualRef.current = visit.manual;
   const go = (id: string) => {
     const a = artworkById(id);
-    if (a) {
-      catalog.select(id);
-      walker.go(viewingPoint(a.position, a.facing));
-      walker.yaw.current = a.facing;
-    }
+    if (!a) return;
+    // Browsing away mid-visit pauses the announced plan instead of silently
+    // abandoning a stop; the recap therefore never loses a completed record.
+    if (
+      (visit.phase === "walking" ||
+        visit.phase === "listening" ||
+        visit.phase === "dwelling") &&
+      visit.currentId !== id
+    )
+      visit.pause();
+    catalog.select(id);
+    walker.go(viewingPoint(a.position, a.facing));
+    walker.yaw.current = a.facing;
   };
-  useEffect(() => {
-    if (tour.state.phase === "walking" && tour.target) go(tour.target);
-  }, [tour.state.phase, tour.target]);
-  useEffect(() => {
-    if (tour.state.phase !== "walking" || !tour.target) return;
-    const a = artworkById(tour.target)!;
-    if (distance(walker.position, viewingPoint(a.position, a.facing)) < 0.15) {
-      tour.arrive();
-      narration.play(a.id);
-    }
-  }, [walker.position, tour.state.phase, tour.target]);
-  const current = useRef({ nearby: catalog.nearby, record: collection.record });
-  current.current = { nearby: catalog.nearby, record: collection.record };
+  const current = useRef({
+    nearby: catalog.nearby,
+    record: collection.record,
+    active: false,
+  });
+  current.current = {
+    nearby: catalog.nearby,
+    record: collection.record,
+    active:
+      visit.phase === "walking" ||
+      visit.phase === "listening" ||
+      visit.phase === "dwelling",
+  };
+  // Free exploration accumulates time here; during a planned visit the session
+  // records the exact dwell per stop, so the two never double-count.
   useEffect(() => {
     const t = setInterval(() => {
+      if (current.current.active) return;
       if (current.current.nearby)
         current.current.record(current.current.nearby, 1);
     }, 1000);
@@ -43,25 +64,16 @@ export function useGallery() {
   }, []);
   return {
     catalog,
-    tour,
+    visit,
     collection,
     walker,
     narration,
     go,
-    pauseTour: () => {
-      tour.pause();
-      walker.stop();
-      narration.pause();
-    },
     stopTour: () => {
-      tour.stop();
+      visit.end();
       walker.stop();
       narration.pause();
-    },
-    nextTour: () => {
-      walker.stop();
-      narration.pause();
-      tour.next();
     },
   };
 }
+export { distance };

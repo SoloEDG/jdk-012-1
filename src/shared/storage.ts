@@ -4,6 +4,8 @@ export const emptyDocument = (): GalleryDocument => ({
   favorites: [],
   visits: [],
   notes: {},
+  skips: [],
+  plan: null,
 });
 export function loadDocument(): GalleryDocument {
   try {
@@ -20,6 +22,18 @@ export function loadDocument(): GalleryDocument {
           )
         : [],
       notes: typeof d.notes === "object" && d.notes ? d.notes : {},
+      skips: Array.isArray(d.skips)
+        ? d.skips.filter(
+            (s: { id?: unknown; reason?: unknown }) =>
+              typeof s.id === "string" && typeof s.reason === "string",
+          )
+        : [],
+      plan:
+        d.plan &&
+        Array.isArray(d.plan.stops) &&
+        typeof d.plan.budgetSeconds === "number"
+          ? d.plan
+          : null,
     };
   } catch {
     return emptyDocument();

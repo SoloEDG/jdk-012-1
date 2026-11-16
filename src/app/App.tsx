@@ -9,14 +9,17 @@ import {
   Move,
   Info,
   X,
+  ClipboardList,
 } from "lucide-react";
 import { Viewport, Map } from "../features/space";
+import { PlanPanel, PlanSummary } from "../features/planner";
 import { ArtworkList, ArtworkDetail } from "../features/catalog";
 import { TourPanel } from "../features/tours";
 import { AudioPlayer } from "../features/narration";
 import { CollectionPanel } from "../features/collection";
 import { artworks, artworkById } from "../shared/catalog";
 import { useGallery } from "./useGallery";
+
 export default function App() {
   const g = useGallery();
   const [tab, setTab] = useState("explore");
@@ -24,6 +27,10 @@ export default function App() {
   const [help, setHelp] = useState(false);
   const [side, setSide] = useState("works");
   const a = artworkById(g.catalog.active);
+  const v = g.visit;
+  const running =
+    v.phase === "walking" || v.phase === "listening" || v.phase === "dwelling";
+  const openPlan = () => setTab("plan");
   return (
     <div className="app">
       <header>
@@ -39,6 +46,13 @@ export default function App() {
             onClick={() => setTab("explore")}
           >
             探索展馆
+          </button>
+          <button
+            className={tab === "plan" ? "selected" : ""}
+            onClick={() => setTab("plan")}
+          >
+            参观计划
+            {running && <span className="live-dot" />}
           </button>
           <button
             className={tab === "journeys" ? "selected" : ""}
@@ -108,16 +122,19 @@ export default function App() {
               position={g.walker.position}
               active={g.catalog.active}
               onSelect={g.go}
+              plan={v.plan}
+              closedZoneIds={v.settings.closedZoneIds}
+              mustSee={v.settings.mustSee}
               large
             />
           )}
-          <TourPanel
-            state={g.tour.state}
-            onStart={g.tour.start}
-            onPause={g.pauseTour}
-            onResume={g.tour.resume}
-            onStop={g.stopTour}
-            onNext={g.nextTour}
+          <PlanSummary
+            plan={v.plan}
+            conflict={v.conflict}
+            phase={v.phase}
+            remainingSeconds={v.remainingSeconds}
+            currentId={v.currentId}
+            onOpen={openPlan}
           />
           <div className="sidebar-footer">
             <Compass size={15} />
@@ -146,7 +163,17 @@ export default function App() {
             <div className="scene-top">
               <span>
                 <span className="live-dot" />
-                自由探索中
+                {running
+                  ? v.phase === "walking"
+                    ? "按计划行走中"
+                    : v.phase === "listening"
+                      ? "作品讲解中"
+                      : "最低观看时间"
+                  : v.phase === "paused"
+                    ? "参观计划已暂停"
+                    : v.phase === "blocked"
+                      ? "计划受阻 · 打开参观计划"
+                      : "自由探索中"}
               </span>
               <button
                 className="glass-button"
@@ -186,6 +213,9 @@ export default function App() {
                 position={g.walker.position}
                 active={g.catalog.active}
                 onSelect={g.go}
+                plan={v.plan}
+                closedZoneIds={v.settings.closedZoneIds}
+                mustSee={v.settings.mustSee}
               />
             </div>
             <div className="scene-controls">
@@ -214,16 +244,14 @@ export default function App() {
           <div className="discover-strip">
             <div>
               <span className="eyebrow">A MOMENT OF DISCOVERY</span>
-              <h3>不止于观看，更在于感受。</h3>
-              <p>走近一件作品，听一段故事。让艺术与此刻的你，产生连接。</p>
+              <h3>按剩余时间，安排这一程。</h3>
+              <p>
+                告诉余境你有多少时间、哪些作品必看、哪里临时封闭，它会算好步行与讲解，边走边更新。
+              </p>
             </div>
-            <button
-              onClick={() => {
-                g.tour.start("nature");
-                setTab("journeys");
-              }}
-            >
-              开启主题之旅 <ArrowUpRight size={19} />
+            <button onClick={openPlan}>
+              {v.phase === "idle" ? "安排我的参观" : "查看参观计划"}
+              <ArrowUpRight size={19} />
             </button>
           </div>
           <div className="art-tags">
@@ -243,38 +271,51 @@ export default function App() {
               onNote={g.collection.note}
               onToggle={g.collection.toggle}
             />
+          ) : tab === "plan" ? (
+            <PlanPanel {...planProps(g)} />
           ) : tab === "journeys" ? (
             <>
               <div className="journey-intro">
                 <div className="eyebrow">FOLLOW YOUR CURIOSITY</div>
                 <h2>沿着共鸣，出发。</h2>
-                <p>选择一条路线，空间导航与作品讲解将陪伴你完成这段旅程。</p>
+                <p>
+                  固定主题只是起点：选择一组必看作品后，仍会按你的剩余时间、实际步行与讲解时长重新计算。
+                </p>
               </div>
               <TourPanel
-                state={g.tour.state}
-                onStart={g.tour.start}
-                onPause={g.pauseTour}
-                onResume={g.tour.resume}
-                onStop={g.stopTour}
-                onNext={g.nextTour}
+                activeId={null}
+                disabled={running}
+                onStartPreset={(mustSee, budgetSeconds) => {
+                  g.visit.journey(mustSee, budgetSeconds);
+                  setTab("plan");
+                }}
               />
             </>
           ) : (
-            <ArtworkDetail
-              id={g.catalog.active}
-              saved={g.collection.document.favorites.includes(
-                g.catalog.active || "",
-              )}
-              onFavorite={() => {
-                if (g.catalog.active) g.collection.toggle(g.catalog.active);
-              }}
-              onListen={() => {
-                if (g.catalog.active) g.narration.play(g.catalog.active);
-              }}
-              onGo={() => {
-                if (g.catalog.active) g.go(g.catalog.active);
-              }}
-            />
+            <>
+              <ArtworkDetail
+                id={g.catalog.active}
+                saved={g.collection.document.favorites.includes(
+                  g.catalog.active || "",
+                )}
+                onFavorite={() => {
+                  if (g.catalog.active) g.collection.toggle(g.catalog.active);
+                }}
+                onListen={() => {
+                  if (g.catalog.active) g.narration.play(g.catalog.active);
+                }}
+                onGo={() => {
+                  if (g.catalog.active) g.go(g.catalog.active);
+                }}
+              />
+              <div className="detail-plan-link">
+                <ClipboardList size={14} />
+                <button className="text-button" onClick={openPlan}>
+                  按时间安排参观计划
+                  <ArrowUpRight size={13} />
+                </button>
+              </div>
+            </>
           )}
           <div className="right-bottom">
             <span className="quote-mark">“</span>
@@ -331,10 +372,13 @@ export default function App() {
               <>
                 <p>使用 W / A / S / D 或方向键自由行走；拖动画面转动视角。</p>
                 <p>
-                  点击画中的作品或左侧列表，自动前往。靠近作品后，右侧切换介绍。
+                  在“参观计划”里设定剩余时间、必看作品与临时封闭区域。计划会同时计算可行步行距离、每件作品的最低观看时间与讲解时长。
                 </p>
                 <p>
-                  主题导览会带你依次前往作品并开始讲解。收藏喜欢的作品，在“我的收藏”写下感想并下载参观回顾。
+                  必看作品放不下时会明确提示冲突，不会悄悄漏掉；行走与讲解会实时消耗预算，路线会自动避开封闭区域而保持顺序稳定。
+                </p>
+                <p>
+                  点击“跳过当前”会把作品记为主动跳过，收藏回顾中会解释原因；讲解播放中修改条件，会在当前讲解结束后才切换新计划。
                 </p>
                 <p>
                   讲解由设备的中文语音合成播放；没有中文语音时仍可阅读同步字幕。
@@ -348,6 +392,9 @@ export default function App() {
                   g.go(id);
                   setMapOpen(false);
                 }}
+                plan={v.plan}
+                closedZoneIds={v.settings.closedZoneIds}
+                mustSee={v.settings.mustSee}
                 large
               />
             )}
@@ -356,4 +403,32 @@ export default function App() {
       )}
     </div>
   );
+}
+
+function planProps(g: ReturnType<typeof useGallery>) {
+  const v = g.visit;
+  return {
+    plan: v.plan,
+    conflict: v.conflict,
+    settings: v.settings,
+    phase: v.phase,
+    currentId: v.currentId,
+    completedIds: v.finishedIds,
+    spent: v.spent,
+    notice: v.notice,
+    pending: v.pending,
+    canRestore: !!v.lastExecutable,
+    mustSeeEditable: true,
+    onBudget: v.setBudget,
+    onMustSee: v.toggleMustSee,
+    onZone: v.toggleZone,
+    onStart: v.start,
+    onPause: v.pause,
+    onResume: v.resume,
+    onNext: v.next,
+    onSkip: v.skip,
+    onRestore: v.restore,
+    onEnd: v.end,
+    onSelect: g.go,
+  };
 }

@@ -1,7 +1,12 @@
 import { Heart, Download, ArrowUpRight } from "lucide-react";
 import type { GalleryDocument } from "../../../shared/types";
 import { artworkById } from "../../../shared/catalog";
-import { recapStats, createRecap } from "../lib/recap";
+import {
+  recapStats,
+  createRecap,
+  exploredSkips,
+  skipLabel,
+} from "../lib/recap";
 import { downloadRecap } from "../lib/download";
 export function CollectionPanel({
   document,
@@ -29,6 +34,27 @@ export function CollectionPanel({
         <span>
           <strong>{Math.floor(stats.seconds / 60)}′</strong>停留时长
         </span>
+      </div>
+      <div className="recap-lists">
+        <div className="recap-heading">
+          <span>计划 {stats.planned} 站</span>
+          <span>跳过 {stats.skipped} 件</span>
+        </div>
+        {exploredSkips(document).length > 0 && (
+          <ul className="skip-list" aria-label="跳过作品与原因">
+            {exploredSkips(document).map((s) => {
+              const a = artworkById(s.id);
+              if (!a) return null;
+              return (
+                <li key={s.id} className={"skip skip-" + s.reason}>
+                  <strong>{a.title}</strong>
+                  <span>{skipLabel(s.reason)}</span>
+                  <small>{s.note}</small>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
       {document.favorites.length === 0 ? (
         <div className="empty">
